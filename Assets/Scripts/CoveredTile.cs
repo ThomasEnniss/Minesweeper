@@ -9,7 +9,7 @@ public class CoveredTile : MonoBehaviour {
 
     private void OnMouseDown()
     {
-        if (OnClick != null) { OnClick(new Vector2(transform.position.x, transform.position.y)); }
-        Debug.Log("Clicked on a tile @ "+transform.position.ToString());
+        Debug.Log("Clicked on a tile @ " + transform.position.ToString());
+        if (OnClick != null) { OnClick(new Vector2(transform.position.x, transform.position.y)); }        
     }
 }

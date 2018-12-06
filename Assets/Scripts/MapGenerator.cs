@@ -15,15 +15,20 @@ public class MapGenerator : MonoBehaviour {
     public Text timer;
 
     public GameObject[] tiles;
+    public GameObject marker;
 
     private int[,] mines;
     private List<Vector2> open;
-    private List<Vector2> closed;
+    private List<Vector2> chosenMines;
     private bool busy;
     private bool[,] visited;
 
-    private int minesLeft = 0;
-    private bool alive = true;
+    private int goodMovesLeft = 0;
+    private bool gameOver = false;
+    private bool gameWon = false;
+    private int timeTaken = 0;
+
+    bool markersDisplayed = false;
 
     private void Start()
     {
@@ -32,9 +37,9 @@ public class MapGenerator : MonoBehaviour {
         visited = new bool[width, height];
         Random.InitState(seed);
         open = new List<Vector2>();
-        closed = new List<Vector2>();
+        chosenMines = new List<Vector2>();
 
-        minesLeft = height * width - numberOfMines;
+        goodMovesLeft = height * width - numberOfMines;
 
         /*TE: Begin by generating the map.*/
         GenerateMap();
@@ -44,23 +49,43 @@ public class MapGenerator : MonoBehaviour {
     private void Update()
     {
         UpdateUI();
+
+        if (!gameOver && !gameWon)
+        {
+            timeTaken = (int)Time.time;
+
+
+        }
+        else {
+            if (!markersDisplayed)
+            {
+                markersDisplayed = true;
+                DisplayMarkers();
+            }
+        }
+
+        if (goodMovesLeft==0) {            
+            gameWon = true;
+        }         
     }
 
-    void UpdateUI() {
-
-        tilesToUncover.text = "Safe Tiles Left: " + minesLeft;
-        gameStatus.text = alive ? "O_O" : "X_X";
-        timer.text = ((int)Time.time).ToString();
+    void UpdateUI()
+    {
+        tilesToUncover.text = "Safe Tiles Left: " + goodMovesLeft;
+        gameStatus.text = !gameOver ? (gameWon ? "^_^" : "o_o") : "X_X";
+        timer.text = timeTaken.ToString();
     }
 
-    void GenerateMap() {
+    void GenerateMap()
+    {
         SetupMap();
         PlaceMines();
         CalculateAdjacentSquares();
     }
 
     /*TE: Initiate the map values. Populate the open list with vectors for choosing mine locations.*/
-    void SetupMap() {        
+    void SetupMap() { 
+        
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
@@ -88,14 +113,15 @@ public class MapGenerator : MonoBehaviour {
 
             open.RemoveAt(randomPick);
 
-            closed.Add(nextMine);
+            chosenMines.Add(nextMine);
         }
     }
 
     /*TE: After mines are placed, we iterate over the remaining squares and calculate how mines they are adjaccent to.*/
     void CalculateAdjacentSquares() {
 
-        for (int i = 0;i<open.Count;i++) {
+        for (int i = 0;i<open.Count;i++)
+        {
             Vector2 current = open[i];
             mines[(int)current.x, (int)current.y] = GetAdjacentMines(current);            
         }
@@ -106,9 +132,10 @@ public class MapGenerator : MonoBehaviour {
 
         int numberOfAdjacentMines = 0;
 
-        for (int i = -1; i < 2; i++) {
-            for (int j = -1; j < 2; j++) {               
-                
+        for (int i = -1; i < 2; i++)
+        {
+            for (int j = -1; j < 2; j++)
+            {  
                 /*TE: Not edge.*/
                 if (current.x+i >= 0 && current.x + i < width && current.y + j >= 0 && current.y + j < height) {
                     if (mines[(int)current.x + i, (int)current.y + j] == 9) {
@@ -136,53 +163,63 @@ public class MapGenerator : MonoBehaviour {
     /*TE: Handle wwhen a tile is clicked on.*/
     void TileClicked(Vector2 start) {
 
-        if (!busy)
+        if (!gameOver)
         {
-            busy = true;
-            Debug.Log("A tile was clicked. Checking what needs to be done...");
+            if (!busy)
+            {
+                visited[(int)start.x, (int)start.y] = true;
+                busy = true;
+                Debug.Log("A tile was clicked. Checking what needs to be done...");
 
-            /*TE: Check what type of tile was clicked*/
-            if (mines[(int)start.x, (int)start.y] == 0)
-            {
-                /*TE: Flood fill.*/
-                Debug.Log("Flooding tiles...");
-                FloodFill(start);
-            }
-            else if (mines[(int)start.x, (int)start.y] == 9)
-            {
-                /*TE: Hit a mine. GG*/
-                Debug.Log("Game Over!");
-                alive = false;
+                /*TE: Check what type of tile was clicked*/
+                if (mines[(int)start.x, (int)start.y] == 0)
+                {
+                    /*TE: Flood fill.*/
+                    Debug.Log("Flooding tiles...");
+                    FloodFill(start);
+                    //StartCoroutine(FloodFill(start));                    
+                }
+                else if (mines[(int)start.x, (int)start.y] == 9)
+                {
+                    /*TE: Hit a mine. GG*/
+                    Debug.Log("Game Over!");
+                    gameOver = true;
+                }
+                else
+                {
+                    Debug.Log("Revealing tile");
+                    Reveal(start);
+                }
+                busy = false;
             }
             else
             {
-                Debug.Log("Revealing tile");
-                Reveal(start);
+                Debug.Log("A tile was clicked. Too busy atm though...");
             }
-            busy = false;
-        }
-        else {
-            Debug.Log("A tile was clicked. Too busy atm though...");
         }
     }
 
     /*TE: Reveals tile or flood fills map*/
     void FloodFill(Vector2 start) {
 
+        int tilesRevealed = 0;
+
         /*TE: Beginning to flood fill.*/
         Debug.Log("-Beginning to flood fill.");
         Debug.Log("-Start is: " + start.ToString());
 
         Queue<Vector2> tilesToCheck = new Queue<Vector2>();
-        tilesToCheck.Enqueue(start);
-
-        visited[(int)start.x, (int)start.y] = true;
+        tilesToCheck.Enqueue(start);        
 
         while (tilesToCheck.Count > 0) {
 
-            Vector2 current = tilesToCheck.Dequeue();            
-            Reveal(current);
+            Vector2 current = tilesToCheck.Dequeue();
+
             Debug.Log("--Current is: " + current.ToString());
+
+            Reveal(current);
+
+            tilesRevealed++;            
 
             for (int i = -1; i < 2; i++)
             {
@@ -190,38 +227,50 @@ public class MapGenerator : MonoBehaviour {
                 {                    
                     if (current.x + i >= 0 && current.x + i < width && current.y + j >= 0 && current.y + j < height)
                     {
-                        if (!visited[(int)current.x + i, (int)current.y + j]) {
-
+                        if (!visited[(int)current.x + i, (int)current.y + j])
+                        {
                             Vector2 temp = new Vector2(current.x + i, current.y + j);
 
-                            if (mines[(int)current.x + i, (int)current.y + j] == 0)
-                            {
-                               
+                            if (mines[(int)temp.x, (int)temp.y] == 0)
+                            {                               
                                 Debug.Log("---Adding at: " + temp.ToString());
-
                                 tilesToCheck.Enqueue(temp);
                             }
 
-                            if (mines[(int)current.x + i, (int)current.y + j] > 0 && mines[(int)current.x + i, (int)current.y + j] < 9)
+                            if (mines[(int)temp.x, (int)temp.y] > 0 && mines[(int)temp.x, (int)temp.y] < 9)
                             {
-                                Debug.Log("---Revealing at: " + current.ToString());
-
+                                Debug.Log("---Revealing at: " + temp.ToString());
                                 Reveal(temp);
+                                tilesRevealed++;
                             }
+
                             visited[(int)temp.x, (int)temp.y] = true;
+
+                            //GameObject newMarker = Instantiate(marker, new Vector3(temp.x, temp.y, -2), Quaternion.identity);
+
+                           // markers.Add(newMarker);
                         }
-                    }
+                    }                    
                 }
             }
-        }       
+        }
+        Debug.Log("Flood fille complete! " + tilesRevealed + " tiles revealed!");
+        //CleanUpMarkers();
+    }
+
+    void DisplayMarkers() {
+
+        for (int i = 0; i < chosenMines.Count; i++) {
+            Instantiate(marker, new Vector3(chosenMines[i].x, chosenMines[i].y, -2), Quaternion.identity);
+        }
     }
 
     /*TE: Exposes the real value of a tile.*/
-    void Reveal(Vector2 tileToPlace) {
-
+    void Reveal(Vector2 tileToPlace)
+    {
         Debug.Log("Revealing a " + mines[(int)tileToPlace.x, (int)tileToPlace.y] + " tile!");
 
         Instantiate(tiles[mines[(int)tileToPlace.x, (int)tileToPlace.y]], new Vector3(tileToPlace.x, tileToPlace.y,-1), Quaternion.identity);
-        minesLeft--;
+        goodMovesLeft--;
     }
 }
